@@ -1,29 +1,28 @@
 package ru.poplavkov.cluster;
 
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
-import java.util.Arrays;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GraphTest {
-    private static Graph graph;
-    private static String q2 = "ab";
-    private static String q1 = "cd";
-    private static String d1 = "ef";
-    private static String d2 = "gh";
+    private Graph graph;
+    private String path = "src/test/resources";
+    private String q2 = "ab";
+    private String q1 = "cd";
+    private String d1 = "ef";
+    private String d2 = "gh";
 
-    @BeforeAll
-    static void init() {
-        graph = new Graph();
+    @BeforeEach
+    void setUp() {
+        graph = new Graph(path);
         graph.addLink(q1, d1);
         graph.addLink(q1, d2);
         graph.addLink(q1, d2);
@@ -45,16 +44,23 @@ class GraphTest {
     @SuppressWarnings("ResultOfMethodCallIgnored")
     @Test
     void writeOnDisk() {
-        String path = "src/test/resources";
-        assertTrue(graph.writeOnDisk(path));
+        Set<String> queries = new HashSet<>(graph.getQueries());
+        Set<String> documents = new HashSet<>(graph.getDocuments());
+        Map<Tuple, Integer> links = new HashMap<>(graph.getLinks());
+
+        assertTrue(graph.writeOnDisk());
 
         File queriesFile = new File(String.format("%s/%s", path, ".queries1"));
         File documentsFile = new File(String.format("%s/%s", path, ".documents1"));
         File linksFile = new File(String.format("%s/%s", path, ".links1"));
 
-        assertTrue(assertExist(queriesFile, graph.getQueries()));
-        assertTrue(assertExist(documentsFile, graph.getDocuments()));
-        assertTrue(assertExist(linksFile, graph.getLinks()));
+        assertTrue(assertExist(queriesFile, queries));
+        assertTrue(assertExist(documentsFile, documents));
+        assertTrue(assertExist(linksFile, links));
+
+        assertTrue(graph.getQueries().isEmpty());
+        assertTrue(graph.getDocuments().isEmpty());
+        assertTrue(graph.getLinks().isEmpty());
 
         queriesFile.delete();
         documentsFile.delete();

@@ -8,41 +8,67 @@ import java.io.IOException;
 import java.util.*;
 
 @SuppressWarnings("WeakerAccess")
-@Getter
 public class Graph {
-    private int counter;
+    @Getter
     private Set<String> queries = new HashSet<>();
+    @Getter
     private Set<String> documents = new HashSet<>();
+    @Getter
     private Map<Tuple, Integer> links = new HashMap<>();
+    private String outputPath;
+    private int counter;
+    private int maxInternalSize;
+    private int currentInternalSize;
 
-    public Graph(int counter) {
+    public Graph(String outputPath, int counter, int maxInternalSize) {
+        this.outputPath = outputPath;
         this.counter = counter;
+        this.maxInternalSize = maxInternalSize;
     }
 
-    public Graph() {
-        this(0);
+    public Graph(String outputPath, int counter) {
+        this(outputPath, counter, 10 * 1024 * 1024);
+    }
+
+    public Graph(String outputPath) {
+        this(outputPath, 0);
     }
 
     public void addLink(String query, String document) {
-        queries.add(query);
-        documents.add(document);
+        if (queries.add(query)) {
+            currentInternalSize += query.getBytes().length;
+        }
+        if (documents.add(document)) {
+            currentInternalSize += document.getBytes().length;
+        }
         Tuple tuple = new Tuple(query, document);
         Integer count = links.get(tuple);
-        count = count == null ? 1 : count + 1;
+        if (count == null) {
+            currentInternalSize += query.getBytes().length + document.getBytes().length;
+            count = 1;
+        } else {
+            count++;
+        }
         links.put(tuple, count);
+
+        if (currentInternalSize >= maxInternalSize) {
+            writeOnDisk();
+        }
     }
 
-    public boolean writeOnDisk(String path) {
-        if (path.charAt(path.length() - 1) == '/') {
-            path = path.substring(0, path.length() - 1);
+    public boolean writeOnDisk() {
+        if (outputPath.charAt(outputPath.length() - 1) == '/') {
+            outputPath = outputPath.substring(0, outputPath.length() - 1);
         }
         counter++;
-        File queriesFile = createFile(path, ".queries", counter);
-        File documentsFile = createFile(path, ".documents", counter);
-        File linksFile = createFile(path, ".links", counter);
-        return writeOnDisk(queriesFile, queries) &&
+        File queriesFile = createFile(outputPath, ".queries", counter);
+        File documentsFile = createFile(outputPath, ".documents", counter);
+        File linksFile = createFile(outputPath, ".links", counter);
+        boolean result = writeOnDisk(queriesFile, queries) &&
                 writeOnDisk(documentsFile, documents) &&
                 writeOnDisk(linksFile, links);
+        if (result) clear();
+        return result;
     }
 
     private boolean writeOnDisk(File file, Set<String> set) {
@@ -92,4 +118,10 @@ public class Graph {
         return new File(String.format("%s/%s%d", path, name, counter));
     }
 
+    private void clear() {
+        queries.clear();
+        documents.clear();
+        links.clear();
+        currentInternalSize = 0;
+    }
 }
