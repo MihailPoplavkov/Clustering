@@ -10,9 +10,11 @@ repositories {
 }
 
 dependencies {
-    compile 'org.apache.logging.log4j:log4j-core:+'
+    compile 'org.apache.logging.log4j:log4j-core:+',
+            files('libs/sqlite-jdbc-3.19.3.jar')
 
     compileOnly 'org.projectlombok:lombok:+'
 
-    testCompile 'org.junit.jupiter:junit-jupiter-api:5.0.0-M4'
+    testCompile 'org.junit.jupiter:junit-jupiter-api:5.0.0-M4',
+            'org.projectlombok:lombok:+'
 }
