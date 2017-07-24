@@ -112,10 +112,12 @@ class Store {
         if (rs.next()) {
             val count = rs.getInt("count");
             prepareStatement(UPDATE_LINKS, count + 1, query, document).execute();
+            log.info(String.format("Updated links table: (%s, %s, %d)", query, document, count + 1));
         } else {
             prepareStatement(INSERT_INTO_QUERIES_IF_NOT_EXISTS, query, query).execute();
             prepareStatement(INSERT_INTO_DOCUMENTS_IF_NOT_EXISTS, document, document).execute();
             prepareStatement(INSERT_INTO_LINKS, query, document).execute();
+            log.info(String.format("Inserted into links table: (%s, %s, %d)", query, document, 1));
         }
     }
 
@@ -137,7 +139,7 @@ class Store {
         while (rs.next()) {
             String k = rs.getString(1);
             int v = rs.getInt(2);
-            log.info(String.format("Select (%s, %d) from links table", k, v));
+            log.info(String.format("Selected (%s, %d) from links table", k, v));
             map.put(k, v);
         }
         return map;
