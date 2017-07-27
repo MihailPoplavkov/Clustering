@@ -1,7 +1,0 @@
-query clickURL
-car www.car.com
-ferrari www.car.com
-cat www.pets.org
-kitty www.cats.ru
-kitty www.pets.org
-ferrari www.car.com

@@ -11,7 +11,8 @@ repositories {
 
 dependencies {
     compile 'org.apache.logging.log4j:log4j-core:+',
-            files('libs/sqlite-jdbc-3.19.3.jar')
+            'io.vavr:vavr:+',
+            'org.postgresql:postgresql:+'
 
     compileOnly 'org.projectlombok:lombok:+'
 
