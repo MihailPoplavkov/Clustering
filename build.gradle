@@ -12,7 +12,8 @@ repositories {
 dependencies {
     compile 'org.apache.logging.log4j:log4j-core:+',
             'io.vavr:vavr:+',
-            'org.postgresql:postgresql:+'
+            'org.postgresql:postgresql:+',
+            'c3p0:c3p0:+'
 
     compileOnly 'org.projectlombok:lombok:+'
 

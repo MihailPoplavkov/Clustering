@@ -29,10 +29,8 @@ class PreprocessorTest {
     @SneakyThrows
     @Test
     void readAndStore() {
-        Preprocessor preprocessor = new Preprocessor(store);
+        val preprocessor = new Preprocessor(store);
         preprocessor.readAndStore("src/test/resources/test.txt");
-        //normalizer.readAndStore("data/user-ct-test-collection-01.txt");
-
         val map = store.selectSetOfQueries("www.car.com");
         assertEquals(2, map.get("ferrari").intValue());
         assertEquals(1, map.get("car").intValue());

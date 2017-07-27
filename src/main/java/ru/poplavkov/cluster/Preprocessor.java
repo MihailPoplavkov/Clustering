@@ -9,13 +9,16 @@ import java.io.*;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.locks.Condition;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 @SuppressWarnings("WeakerAccess")
 @Log4j2
 public class Preprocessor {
+    private static final int POOL_SIZE = 5;
     private static final String stopWordsFileName = "src/main/resources/stopWordsSortedList.txt";
     private static String[] stopWordsSorted;
 
@@ -34,14 +37,14 @@ public class Preprocessor {
     private Map<Tuple2<String, String>, Integer> map;
     private int countToFlush;
     private Lock lock;
-    private Condition mapIsEmpty;
+    private ExecutorService threadPool;
 
     public Preprocessor(Store store, int countToFlush) {
         this.store = store;
         this.countToFlush = countToFlush;
         map = new HashMap<>(countToFlush);
         lock = new ReentrantLock();
-        mapIsEmpty = lock.newCondition();
+        threadPool = Executors.newFixedThreadPool(POOL_SIZE);
         log.info(String.format("Created Preprocessor object with countToFlush=%d", countToFlush));
     }
 
@@ -69,25 +72,6 @@ public class Preprocessor {
             if (queryIndex == -1 || documentIndex == -1)
                 throw new IllegalArgumentException("Input file have to contain correct headers");
 
-            val thread = new Thread(() -> {
-                while (!Thread.currentThread().isInterrupted()) {
-                    if (!map.isEmpty()) {
-                        Map<Tuple2<String, String>, Integer> newMap;
-                        lock.lock();
-                        try {
-                            newMap = new HashMap<>(map);
-                            map.clear();
-                            mapIsEmpty.signalAll();
-                        } finally {
-                            lock.unlock();
-                        }
-                        store.insertAll(newMap);
-                    }
-                }
-            });
-
-            thread.start();
-
             final int qIndex = queryIndex;
             final int docIndex = documentIndex;
             final int maxIndex = qIndex > docIndex ? qIndex : docIndex;
@@ -102,28 +86,25 @@ public class Preprocessor {
                     .forEach(tuple -> {
                         lock.lock();
                         try {
-                            while (map.size() >= countToFlush) {
-                                mapIsEmpty.awaitUninterruptibly();
+                            if (map.size() >= countToFlush) {
+                                Map<Tuple2<String, String>, Integer> newMap = new HashMap<>(map);
+                                map.clear();
+                                threadPool.execute(() -> store.insertAll(newMap));
                             }
                             map.put(tuple, map.getOrDefault(tuple, 0) + 1);
                         } finally {
                             lock.unlock();
                         }
                     });
+            //remaining
+            threadPool.execute(() -> store.insertAll(map));
 
-            //TODO: redone below
-
+            //join
+            threadPool.shutdown();
             try {
-                Thread.sleep(3000);
+                threadPool.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
             } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-            log.debug("Reached the end of readAndStore");
-            thread.interrupt();
-            try {
-                thread.join();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+                log.error(e.getMessage());
             }
             store.compact();
         }
@@ -144,7 +125,9 @@ public class Preprocessor {
                 .collect(StringBuilder::new,
                         (sb, s) -> sb.append(s).append(" "),
                         StringBuilder::append);
-        stringBuilder.deleteCharAt(stringBuilder.length() - 1);
+        if (stringBuilder.length() > 0) {
+            stringBuilder.deleteCharAt(stringBuilder.length() - 1);
+        }
         return stringBuilder.toString();
     }
 
