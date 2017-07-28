@@ -9,9 +9,7 @@ import java.io.*;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -80,7 +78,7 @@ public class Preprocessor {
                     .map(s -> s.split("\\t"))
                     .filter(s -> s.length > maxIndex)
                     .map(s ->
-                            new Tuple2<>(stem(removeStopWords(normalize(s[qIndex]))),
+                            new Tuple2<>(stemAndRemoveStopWords(normalize(s[qIndex])),
                                     s[docIndex]))
                     .filter(tuple -> !tuple._1.isEmpty())
                     .forEach(tuple -> {
@@ -108,7 +106,6 @@ public class Preprocessor {
             }
             store.compact();
         }
-
     }
 
     private String normalize(String str) {
@@ -118,9 +115,11 @@ public class Preprocessor {
                 .trim();
     }
 
-    private String removeStopWords(String str) {
-        val tokens = str.split("\\s");
-        val stringBuilder = Arrays.stream(tokens)
+    private String stemAndRemoveStopWords(String str) {
+        val stemmer = new Stemmer();
+        val stringBuilder = Arrays.stream(str.split("\\s"))
+                .filter(s -> s.length() > 1)
+                .map(stemmer::stem)
                 .filter(s -> Arrays.binarySearch(stopWordsSorted, s) < 0)
                 .collect(StringBuilder::new,
                         (sb, s) -> sb.append(s).append(" "),
@@ -129,9 +128,5 @@ public class Preprocessor {
             stringBuilder.deleteCharAt(stringBuilder.length() - 1);
         }
         return stringBuilder.toString();
-    }
-
-    private String stem(String str) {
-        return str;
     }
 }
