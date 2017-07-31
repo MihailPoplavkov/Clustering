@@ -12,9 +12,7 @@ import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Log4j2
@@ -25,6 +23,9 @@ class Store implements AutoCloseable {
     private static final String SELECT_QUERIES_FROM_LINKS = "SELECT q, cou FROM select_queries(?)";
     private static final String SELECT_DOCUMENTS_FROM_LINKS = "SELECT doc, cou FROM select_documents(?)";
     private static final String COMPACT_LINKS = "SELECT compact_links()";
+    private static final String CREATE_CLUSTER_TABLES = "SELECT create_cluster_tables()";
+    private static final String COMBINE_FIRST = "SELECT * FROM combine_first(?)";
+    private static final String SELECT_CLUSTERS = "SELECT * FROM select_clusters()";
 
     private String pathToConfig;
     private ComboPooledDataSource cpds;
@@ -136,6 +137,54 @@ class Store implements AutoCloseable {
         try (val connection = getConnection();
              val statement = connection.createStatement()) {
             statement.execute(COMPACT_LINKS);
+        }
+    }
+
+    @SneakyThrows
+    void createClusterTables() {
+        try (val connection = getConnection();
+        val statement = connection.createStatement()) {
+            statement.execute(CREATE_CLUSTER_TABLES);
+        }
+    }
+
+    @SneakyThrows
+    void combineFirst(double threshold) {
+        try (val connection = getConnection();
+        val preparedStatement = connection.prepareStatement(COMBINE_FIRST)) {
+            preparedStatement.setDouble(1, threshold);
+            try (val rs = preparedStatement.executeQuery()) {
+                val combined = rs.getString(1);
+                log.debug(String.format("Combined: %s", combined));
+            }
+        }
+    }
+
+    @SneakyThrows
+    void combineAll(double threshold, int countBatches) {
+        try (val connection = getConnection();
+        val preparedStatement = connection.prepareStatement(COMBINE_FIRST)) {
+            int[] updated = {1};
+            while (updated[updated.length - 1] != 0) {
+                for (int i = 0; i < countBatches; i++) {
+                    preparedStatement.setDouble(1, threshold);
+                    preparedStatement.addBatch();
+                }
+                updated = preparedStatement.executeBatch();
+            }
+        }
+    }
+
+    @SneakyThrows
+    List<String> selectClusters() {
+        try (val connection = getConnection();
+             val statement = connection.createStatement();
+             val rs = statement.executeQuery(SELECT_CLUSTERS)) {
+            val result = new ArrayList<String>();
+            while (rs.next()) {
+                result.add(rs.getString(1));
+            }
+            return result;
         }
     }
 

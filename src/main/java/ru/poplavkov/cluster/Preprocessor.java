@@ -105,6 +105,7 @@ public class Preprocessor {
                 log.error(e.getMessage());
             }
             store.compact();
+            log.info("Store compacted");
         }
     }
 
