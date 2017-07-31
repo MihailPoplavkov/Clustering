@@ -34,12 +34,13 @@ class ClusterizatorTest {
 
     @Test
     void cluster() {
-        val clusterizator = new Clusterizator(store, 0.001, 5);
+        val clusterizator = new Clusterizator(store);
         clusterizator.cluster();
-        val list = clusterizator.getClusters();
-        assertEquals(2, list.size());
-        val set1 = list.get(0).split(";");
-        val set2 = list.get(1).split(";");
+        val set = clusterizator.getClusters();
+        assertEquals(2, set.size());
+        val iter = set.iterator();
+        val set1 = iter.next().split(";");
+        val set2 = iter.next().split(";");
         String[] cars;
         String[] pets;
         Arrays.sort(set1);

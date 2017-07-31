@@ -118,7 +118,7 @@ BEGIN
   ORDER BY res DESC, cou1 DESC, cou2 DESC
   LIMIT 1;
 
-  IF currentRes < threshold
+  IF currentRes IS NULL OR currentRes < threshold
   THEN
     RETURN '';
   END IF;

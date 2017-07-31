@@ -1,21 +1,35 @@
 package ru.poplavkov.cluster;
 
+import java.util.Set;
 import lombok.extern.log4j.Log4j2;
-
-import java.util.List;
 
 @SuppressWarnings("WeakerAccess")
 @Log4j2
 public class Clusterizator {
+    /**
+     * Ready to cluster store.
+     *
+     * @see Store
+     */
     private Store store;
+
+    /**
+     * Threshold to similarity function, happened to differ similar and
+     * dissimilar queries
+     */
     private double threshold;
+
+    /**
+     * Count of queries sent to database per time
+     */
     private int countBatches;
 
     public Clusterizator(Store store, double threshold, int countBatches) {
         this.store = store;
         this.threshold = threshold;
         this.countBatches = countBatches;
-        log.info(String.format("Created Clusterizator object with threshold=%3.5f and countBatches=%d",
+        log.info(String.format(
+                "Created Clusterizator object with threshold=%3.5f and countBatches=%d",
                 threshold, countBatches));
     }
 
@@ -24,6 +38,9 @@ public class Clusterizator {
         this (store, 0.001, 100);
     }
 
+    /**
+     * Creates all necessary tables and cluster.
+     */
     public void cluster() {
         store.createClusterTables();
         log.info("Cluster tables created");
@@ -32,7 +49,7 @@ public class Clusterizator {
         log.info("Clustering complete");
     }
 
-    public List<String> getClusters() {
+    public Set<String> getClusters() {
         return store.selectClusters();
     }
 }

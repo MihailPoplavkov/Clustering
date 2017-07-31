@@ -12,24 +12,60 @@ import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * Cover all interactions with database. It's used to store some data
+ * to or get some data from database.
+ *
+ * @author Mihail Poplavkov
+ * @see Connection
+ */
 @Log4j2
 class Store implements AutoCloseable {
+    /**
+     * Needful SQL queries that used to interact with database.
+     */
     private static final String CREATE_TABLES = "SELECT create_tables()";
     private static final String DROP_TABLES = "SELECT drop_tables()";
     private static final String INSERT_INTO_LINKS = "SELECT insert_line(?, ?, ?)";
-    private static final String SELECT_QUERIES_FROM_LINKS = "SELECT q, cou FROM select_queries(?)";
-    private static final String SELECT_DOCUMENTS_FROM_LINKS = "SELECT doc, cou FROM select_documents(?)";
+    private static final String SELECT_QUERIES = "SELECT q, cou FROM select_queries(?)";
+    private static final String SELECT_DOCUMENTS = "SELECT doc, cou FROM select_documents(?)";
     private static final String COMPACT_LINKS = "SELECT compact_links()";
     private static final String CREATE_CLUSTER_TABLES = "SELECT create_cluster_tables()";
     private static final String COMBINE_FIRST = "SELECT * FROM combine_first(?)";
     private static final String SELECT_CLUSTERS = "SELECT * FROM select_clusters()";
 
+    /**
+     * Path to the directory containing config file {@code db.properties}
+     * and SQL scripts, needed to interact with database.
+     * <p>
+     * <p>{@code db.properties} file contains data to configure connection
+     * to database.
+     */
     private String pathToConfig;
+
+    /**
+     * A c3po connection pool.
+     *
+     * @see <a href="http://www.mchange.com/projects/c3p0/">c3po</a>
+     * @see ComboPooledDataSource
+     */
     private ComboPooledDataSource cpds;
 
+    /**
+     * Constructs Store using specified {@code pathToConfig}. Tunes the
+     * connection pool.
+     *
+     * @param pathToConfig path to the directory containing config file
+     *                     {@code db.properties} and SQL scripts, needed
+     *                     to interact with database
+     */
     @SneakyThrows
     Store(String pathToConfig) {
         this.pathToConfig = pathToConfig;
@@ -58,16 +94,29 @@ class Store implements AutoCloseable {
         cpds.setAcquireIncrement(1);
     }
 
+    /**
+     * Extracts connections from connection pool.
+     *
+     * @return extracted connection
+     */
     @SneakyThrows
     private Connection getConnection() {
         return cpds.getConnection();
     }
 
+    /**
+     * Creates database using the {@code init.sql} script from specified by
+     * {@code pathToConfig} directory.
+     */
     void createDB() {
         executeSQL(pathToConfig + "/init.sql");
         log.info("Database created");
     }
 
+    /**
+     * Drops database using the {@code drop.sql} script from specified by
+     * {@code pathToConfig} directory.
+     */
     void dropDB() {
         executeSQL(pathToConfig + "/drop.sql");
         log.info("Database dropped");
@@ -83,6 +132,10 @@ class Store implements AutoCloseable {
         }
     }
 
+    /**
+     * Creates tables required to correct work of application. Uses stored
+     * procedure from {@code init.sql} script.
+     */
     @SneakyThrows(SQLException.class)
     void createTables() {
         try (val connection = getConnection();
@@ -91,6 +144,10 @@ class Store implements AutoCloseable {
         }
     }
 
+    /**
+     * Drops all used tables. Uses stored procedure from {@code init.sql}
+     * script.
+     */
     @SneakyThrows(SQLException.class)
     void dropTables() {
         try (val connection = getConnection();
@@ -99,6 +156,14 @@ class Store implements AutoCloseable {
         }
     }
 
+    /**
+     * Insert into database entry about specified row. Uses stored procedure
+     * from {@code init.sql} script.
+     *
+     * @param query    query name
+     * @param document document name
+     * @param count    count of links between query and document
+     */
     @SneakyThrows(SQLException.class)
     void insert(String query, String document, int count) {
         try (val connection = getConnection();
@@ -110,6 +175,15 @@ class Store implements AutoCloseable {
         }
     }
 
+    /**
+     * Insert into database entries about specified rows. Uses stored procedure
+     * from {@code init.sql} script.
+     *
+     * @param map map, each entry of which represents one row. Key is a tuple
+     *            consist of two Strings: {@code query} and {@code document}.
+     *            Value is the count of links between those query and document.
+     * @see Tuple2
+     */
     void insertAll(Map<Tuple2<String, String>, Integer> map) {
         try (val connection = getConnection();
              val statement = connection
@@ -132,6 +206,44 @@ class Store implements AutoCloseable {
         }
     }
 
+    /**
+     * Compacts entries in database, that is group entries with the same
+     * query and document and sum their counts. Uses stored procedure from
+     * {@code init.sql} script.
+     *
+     * <p>For example, two rows before compact looks like
+     * <table>
+     *     <tr>
+     *         <th>query</th>
+     *         <th>document</th>
+     *         <th>count</th>
+     *     </tr>
+     *     <tr>
+     *         <td>car</td>
+     *         <td>www.car.com</td>
+     *         <td>1000</td>
+     *     </tr>
+     *     <tr>
+     *         <td>car</td>
+     *         <td>www.car.com</td>
+     *         <td>500</td>
+     *     </tr>
+     * </table>
+     * <br>
+     * after compact will looks like
+     * <table>
+     *     <tr>
+     *         <th>query</th>
+     *         <th>document</th>
+     *         <th>count</th>
+     *     </tr>
+     *     <tr>
+     *         <td>car</td>
+     *         <td>www.car.com</td>
+     *         <td>1500</td>
+     *     </tr>
+     * </table>
+     */
     @SneakyThrows(SQLException.class)
     void compact() {
         try (val connection = getConnection();
@@ -140,18 +252,36 @@ class Store implements AutoCloseable {
         }
     }
 
+    /**
+     * Creates tables required to clustering. Uses stored
+     * procedure from {@code init.sql} script.
+     *
+     * <p>It also creates table, containing almost result of CROSS JOIN of
+     * the existing table, received in the previous steps (that's why those
+     * tables creates not at start of application).
+     */
     @SneakyThrows
     void createClusterTables() {
         try (val connection = getConnection();
-        val statement = connection.createStatement()) {
+             val statement = connection.createStatement()) {
             statement.execute(CREATE_CLUSTER_TABLES);
         }
     }
 
+    /**
+     * Cluster two most similar entries. Uses stored procedure from
+     * {@code init.sql} script.
+     *
+     * @param threshold threshold of the meaning "similar". If similarity
+     *                  function returns value exceeding specified value
+     *                  for two most similar queries then those queries
+     *                  will be combined in one cluster. Otherwise, not
+     */
+    @SuppressWarnings("unused")
     @SneakyThrows
     void combineFirst(double threshold) {
         try (val connection = getConnection();
-        val preparedStatement = connection.prepareStatement(COMBINE_FIRST)) {
+             val preparedStatement = connection.prepareStatement(COMBINE_FIRST)) {
             preparedStatement.setDouble(1, threshold);
             try (val rs = preparedStatement.executeQuery()) {
                 val combined = rs.getString(1);
@@ -160,13 +290,25 @@ class Store implements AutoCloseable {
         }
     }
 
+    /**
+     * Cluster all existing entries. Stops when similarity function returns
+     * value less than {@code threshold}. But whole cycle of {@code countOfBatches}
+     * iterations takes care of (last few iterations will do nothing). Uses
+     * stored procedure from {@code init.sql} script.
+     *
+     * @param threshold     threshold of the meaning "similar". If similarity
+     *                      function returns value exceeding specified value
+     *                      for two most similar queries then those queries
+     *                      will be combined in one cluster. Otherwise, not
+     * @param countOfBatches  count of queries sent to database per time
+     */
     @SneakyThrows
-    void combineAll(double threshold, int countBatches) {
+    void combineAll(double threshold, int countOfBatches) {
         try (val connection = getConnection();
-        val preparedStatement = connection.prepareStatement(COMBINE_FIRST)) {
+             val preparedStatement = connection.prepareStatement(COMBINE_FIRST)) {
             int[] updated = {1};
             while (updated[updated.length - 1] != 0) {
-                for (int i = 0; i < countBatches; i++) {
+                for (int i = 0; i < countOfBatches; i++) {
                     preparedStatement.setDouble(1, threshold);
                     preparedStatement.addBatch();
                 }
@@ -175,12 +317,18 @@ class Store implements AutoCloseable {
         }
     }
 
+    /**
+     * Selects formed clusters (only consists of at less two queries). Uses
+     * stored procedure from {@code init.sql} script.
+     *
+     * @return set of formed clusters
+     */
     @SneakyThrows
-    List<String> selectClusters() {
+    Set<String> selectClusters() {
         try (val connection = getConnection();
              val statement = connection.createStatement();
              val rs = statement.executeQuery(SELECT_CLUSTERS)) {
-            val result = new ArrayList<String>();
+            val result = new HashSet<String>();
             while (rs.next()) {
                 result.add(rs.getString(1));
             }
@@ -188,12 +336,26 @@ class Store implements AutoCloseable {
         }
     }
 
+    /**
+     * Selects document and count corresponding to specified {@code query}.
+     * Uses stored procedure from {@code init.sql} script.
+     *
+     * @param query interesting query
+     * @return      map, consist of document and count
+     */
     Map<String, Integer> selectSetOfDocuments(String query) {
-        return selectMap(SELECT_DOCUMENTS_FROM_LINKS, query);
+        return selectMap(SELECT_DOCUMENTS, query);
     }
 
+    /**
+     * Selects query and count corresponding to specified {@code document}.
+     * Uses stored procedure from {@code init.sql} script.
+     *
+     * @param document  interesting document
+     * @return          map, consist of query and count
+     */
     Map<String, Integer> selectSetOfQueries(String document) {
-        return selectMap(SELECT_QUERIES_FROM_LINKS, document);
+        return selectMap(SELECT_QUERIES, document);
     }
 
     @SneakyThrows(SQLException.class)
@@ -214,8 +376,14 @@ class Store implements AutoCloseable {
         }
     }
 
+    /**
+     * Closes all connections in connection pool.
+     *
+     * @see ComboPooledDataSource
+     * @throws SQLException if exception happened while closing.
+     */
     @Override
-    public void close() throws Exception {
+    public void close() throws SQLException {
         cpds.close();
     }
 }
