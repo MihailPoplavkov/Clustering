@@ -67,42 +67,52 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql VOLATILE;
 
-CREATE OR REPLACE FUNCTION combine_first(threshold DOUBLE PRECISION) RETURNS TEXT AS $$
+CREATE OR REPLACE FUNCTION combine_all(threshold DOUBLE PRECISION) RETURNS VOID AS $$
 DECLARE   query1     TEXT;
   DECLARE query2     TEXT;
   DECLARE allCount   INTEGER;
   DECLARE currentRes DOUBLE PRECISION;
   DECLARE concat     TEXT;
 BEGIN
+  CREATE TABLE tmp_links (
+    q1 TEXT,
+    q2 TEXT,
+    cou1 INTEGER,
+    cou2 INTEGER,
+    res DOUBLE PRECISION
+  );
   SELECT q1, q2, cou1 + cou2, res
     INTO query1, query2, allCount, currentRes
     FROM links_cluster
     ORDER BY res DESC, cou1 DESC, cou2 DESC LIMIT 1;
-  IF currentRes IS NULL OR currentRes < threshold THEN
-    RETURN '';
-  END IF;
-  concat = query1 || ';' || query2;
-  CREATE TABLE tmp_links AS
-    SELECT q1, q2, cou1, cou2, res
-    FROM links_cluster
-    WHERE q1 IN (query1, query2);
-  INSERT INTO tmp_links
-    SELECT q2, q1, cou2, cou1, res
-    FROM links_cluster
-    WHERE q2 IN (query1, query2);
-  DELETE FROM links_cluster
-    WHERE q1 IN (query1, query2) OR q2 IN (query1, query2);
-  DELETE FROM tmp_links
-    WHERE (q1 = query1 AND q2 = query2) OR (q2 = query1 AND q1 = query2);
-  UPDATE tmp_links SET q1 = concat;
-  INSERT INTO links_cluster
-    SELECT q1, q2, allCount, cou2, SUM((cou1 + cou2) * res) / (allCount + cou2)
-    FROM tmp_links
-    GROUP BY q1, q2, cou2;
-  DELETE FROM clusters WHERE cluster IN (query1, query2);
-  INSERT INTO clusters (cluster) VALUES (concat);
+  WHILE NOT (currentRes IS NULL OR currentRes < threshold) LOOP
+    concat = query1 || ';' || query2;
+    INSERT INTO tmp_links
+      SELECT q1, q2, cou1, cou2, res
+      FROM links_cluster
+      WHERE q1 IN (query1, query2);
+    INSERT INTO tmp_links
+      SELECT q2, q1, cou2, cou1, res
+      FROM links_cluster
+      WHERE q2 IN (query1, query2);
+    DELETE FROM links_cluster
+      WHERE q1 IN (query1, query2) OR q2 IN (query1, query2);
+    DELETE FROM tmp_links
+      WHERE (q1 = query1 AND q2 = query2) OR (q2 = query1 AND q1 = query2);
+    UPDATE tmp_links SET q1 = concat;
+    INSERT INTO links_cluster
+      SELECT q1, q2, allCount, cou2, SUM((cou1 + cou2) * res) / (allCount + cou2)
+      FROM tmp_links
+      GROUP BY q1, q2, cou2;
+    DELETE FROM clusters WHERE cluster IN (query1, query2);
+    INSERT INTO clusters (cluster) VALUES (concat);
+    TRUNCATE TABLE tmp_links;
+    SELECT q1, q2, cou1 + cou2, res
+      INTO query1, query2, allCount, currentRes
+      FROM links_cluster
+      ORDER BY res DESC, cou1 DESC, cou2 DESC LIMIT 1;
+  END LOOP;
   DROP TABLE tmp_links;
-  RETURN concat;
 END;
 $$ LANGUAGE plpgsql VOLATILE;
 

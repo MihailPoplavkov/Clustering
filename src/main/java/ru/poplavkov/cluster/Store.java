@@ -38,7 +38,7 @@ class Store implements AutoCloseable {
     private static final String SELECT_DOCUMENTS = "SELECT doc, cou FROM select_documents(?)";
     private static final String COMPACT_LINKS = "SELECT compact_links()";
     private static final String CREATE_CLUSTER_TABLES = "SELECT create_cluster_tables()";
-    private static final String COMBINE_FIRST = "SELECT * FROM combine_first(?)";
+    private static final String COMBINE_ALL = "SELECT combine_all(?)";
     private static final String SELECT_CLUSTERS = "SELECT * FROM select_clusters()";
 
     /**
@@ -210,38 +210,38 @@ class Store implements AutoCloseable {
      * Compacts entries in database, that is group entries with the same
      * query and document and sum their counts. Uses stored procedure from
      * {@code init.sql} script.
-     *
+     * <p>
      * <p>For example, two rows before compact looks like
      * <table>
-     *     <tr>
-     *         <th>query</th>
-     *         <th>document</th>
-     *         <th>count</th>
-     *     </tr>
-     *     <tr>
-     *         <td>car</td>
-     *         <td>www.car.com</td>
-     *         <td>1000</td>
-     *     </tr>
-     *     <tr>
-     *         <td>car</td>
-     *         <td>www.car.com</td>
-     *         <td>500</td>
-     *     </tr>
+     * <tr>
+     * <th>query</th>
+     * <th>document</th>
+     * <th>count</th>
+     * </tr>
+     * <tr>
+     * <td>car</td>
+     * <td>www.car.com</td>
+     * <td>1000</td>
+     * </tr>
+     * <tr>
+     * <td>car</td>
+     * <td>www.car.com</td>
+     * <td>500</td>
+     * </tr>
      * </table>
      * <br>
      * after compact will looks like
      * <table>
-     *     <tr>
-     *         <th>query</th>
-     *         <th>document</th>
-     *         <th>count</th>
-     *     </tr>
-     *     <tr>
-     *         <td>car</td>
-     *         <td>www.car.com</td>
-     *         <td>1500</td>
-     *     </tr>
+     * <tr>
+     * <th>query</th>
+     * <th>document</th>
+     * <th>count</th>
+     * </tr>
+     * <tr>
+     * <td>car</td>
+     * <td>www.car.com</td>
+     * <td>1500</td>
+     * </tr>
      * </table>
      */
     @SneakyThrows(SQLException.class)
@@ -255,7 +255,7 @@ class Store implements AutoCloseable {
     /**
      * Creates tables required to clustering. Uses stored
      * procedure from {@code init.sql} script.
-     *
+     * <p>
      * <p>It also creates table, containing almost result of CROSS JOIN of
      * the existing table, received in the previous steps (that's why those
      * tables creates not at start of application).
@@ -269,7 +269,8 @@ class Store implements AutoCloseable {
     }
 
     /**
-     * Cluster two most similar entries. Uses stored procedure from
+     * Cluster all existing entries. Stops when similarity function returns
+     * value less than {@code threshold}. Uses stored procedure from
      * {@code init.sql} script.
      *
      * @param threshold threshold of the meaning "similar". If similarity
@@ -277,43 +278,12 @@ class Store implements AutoCloseable {
      *                  for two most similar queries then those queries
      *                  will be combined in one cluster. Otherwise, not
      */
-    @SuppressWarnings("unused")
     @SneakyThrows
-    void combineFirst(double threshold) {
+    void combineAll(double threshold) {
         try (val connection = getConnection();
-             val preparedStatement = connection.prepareStatement(COMBINE_FIRST)) {
+             val preparedStatement = connection.prepareStatement(COMBINE_ALL)) {
             preparedStatement.setDouble(1, threshold);
-            try (val rs = preparedStatement.executeQuery()) {
-                val combined = rs.getString(1);
-                log.debug(String.format("Combined: %s", combined));
-            }
-        }
-    }
-
-    /**
-     * Cluster all existing entries. Stops when similarity function returns
-     * value less than {@code threshold}. But whole cycle of {@code countOfBatches}
-     * iterations takes care of (last few iterations will do nothing). Uses
-     * stored procedure from {@code init.sql} script.
-     *
-     * @param threshold     threshold of the meaning "similar". If similarity
-     *                      function returns value exceeding specified value
-     *                      for two most similar queries then those queries
-     *                      will be combined in one cluster. Otherwise, not
-     * @param countOfBatches  count of queries sent to database per time
-     */
-    @SneakyThrows
-    void combineAll(double threshold, int countOfBatches) {
-        try (val connection = getConnection();
-             val preparedStatement = connection.prepareStatement(COMBINE_FIRST)) {
-            int[] updated = {1};
-            while (updated[updated.length - 1] != 0) {
-                for (int i = 0; i < countOfBatches; i++) {
-                    preparedStatement.setDouble(1, threshold);
-                    preparedStatement.addBatch();
-                }
-                updated = preparedStatement.executeBatch();
-            }
+            preparedStatement.execute();
         }
     }
 
@@ -341,7 +311,7 @@ class Store implements AutoCloseable {
      * Uses stored procedure from {@code init.sql} script.
      *
      * @param query interesting query
-     * @return      map, consist of document and count
+     * @return map, consist of document and count
      */
     Map<String, Integer> selectSetOfDocuments(String query) {
         return selectMap(SELECT_DOCUMENTS, query);
@@ -351,8 +321,8 @@ class Store implements AutoCloseable {
      * Selects query and count corresponding to specified {@code document}.
      * Uses stored procedure from {@code init.sql} script.
      *
-     * @param document  interesting document
-     * @return          map, consist of query and count
+     * @param document interesting document
+     * @return map, consist of query and count
      */
     Map<String, Integer> selectSetOfQueries(String document) {
         return selectMap(SELECT_QUERIES, document);
@@ -379,8 +349,8 @@ class Store implements AutoCloseable {
     /**
      * Closes all connections in connection pool.
      *
-     * @see ComboPooledDataSource
      * @throws SQLException if exception happened while closing.
+     * @see ComboPooledDataSource
      */
     @Override
     public void close() throws SQLException {

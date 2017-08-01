@@ -19,23 +19,16 @@ public class Clusterizator {
      */
     private double threshold;
 
-    /**
-     * Count of queries sent to database per time
-     */
-    private int countBatches;
-
-    public Clusterizator(Store store, double threshold, int countBatches) {
+    public Clusterizator(Store store, double threshold) {
         this.store = store;
         this.threshold = threshold;
-        this.countBatches = countBatches;
         log.info(String.format(
-                "Created Clusterizator object with threshold=%3.5f and countBatches=%d",
-                threshold, countBatches));
+                "Created Clusterizator object with threshold=%3.5f", threshold));
     }
 
     @SuppressWarnings("unused")
     public Clusterizator(Store store) {
-        this (store, 0.001, 100);
+        this (store, 0.001);
     }
 
     /**
@@ -45,7 +38,7 @@ public class Clusterizator {
         store.createClusterTables();
         log.info("Cluster tables created");
         log.info("Start clustering");
-        store.combineAll(threshold, countBatches);
+        store.combineAll(threshold);
         log.info("Clustering complete");
     }
 
