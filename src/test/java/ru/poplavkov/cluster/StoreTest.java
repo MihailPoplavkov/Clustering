@@ -46,7 +46,7 @@ class StoreTest {
         store.compact();
 
         val map1 = store.selectSetOfDocuments(q1);
-        assertEquals(2, map1.get(d1).intValue());
+        assertEquals(2, map1.get("other").intValue());
         assertEquals(10, map1.get(d2).intValue());
 
         val map2 = store.selectSetOfQueries(d2);

@@ -31,9 +31,9 @@ class PreprocessorTest {
     void readAndStore() {
         val preprocessor = new Preprocessor(store);
         preprocessor.readAndStore("src/test/resources/test.txt");
-        val map = store.selectSetOfQueries("www.car.com");
-        assertEquals(2, map.get("ferrari").intValue());
-        assertEquals(1, map.get("car").intValue());
+        val map = store.selectSetOfQueries("www.pets.org");
+        assertEquals(1, map.get("kitti").intValue());
+        assertEquals(1, map.get("cat").intValue());
     }
 
 }

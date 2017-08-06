@@ -17,9 +17,9 @@ public class Clusterizator {
      * Threshold to similarity function, happened to differ similar and
      * dissimilar queries
      */
-    private double threshold;
+    private float threshold;
 
-    public Clusterizator(Store store, double threshold) {
+    public Clusterizator(Store store, float threshold) {
         this.store = store;
         this.threshold = threshold;
         log.info(String.format(
@@ -28,18 +28,20 @@ public class Clusterizator {
 
     @SuppressWarnings("unused")
     public Clusterizator(Store store) {
-        this (store, 0.001);
+        this (store, 0.001f);
     }
 
     /**
      * Creates all necessary tables and cluster.
      */
     public void cluster() {
-        store.createClusterTables();
-        log.info("Cluster tables created");
-        log.info("Start clustering");
-        store.combineAll(threshold);
-        log.info("Clustering complete");
+        while (store.createPreCluster() > 0) {
+            store.createClusterTables();
+            log.info("Cluster tables created");
+            log.info("Start clustering");
+            log.info(String.format("Clustering complete. Created %d clusters", store.combineAll(threshold)));
+        }
+        log.info("Clustering is over");
     }
 
     public Set<String> getClusters() {

@@ -5,5 +5,6 @@ DROP FUNCTION select_queries(TEXT);
 DROP FUNCTION select_documents(TEXT);
 DROP FUNCTION compact_links();
 DROP FUNCTION create_cluster_tables();
-DROP FUNCTION combine_all(DOUBLE PRECISION);
+DROP FUNCTION combine_all(REAL);
 DROP FUNCTION select_clusters();
+DROP FUNCTION pre_cluster();

@@ -36,9 +36,10 @@ class Store implements AutoCloseable {
     private static final String INSERT_INTO_LINKS = "SELECT insert_line(?, ?, ?)";
     private static final String SELECT_QUERIES = "SELECT q, cou FROM select_queries(?)";
     private static final String SELECT_DOCUMENTS = "SELECT doc, cou FROM select_documents(?)";
+    private static final String CREATE_PRE_CLUSTER = "SELECT * FROM pre_cluster()";
     private static final String COMPACT_LINKS = "SELECT compact_links()";
     private static final String CREATE_CLUSTER_TABLES = "SELECT create_cluster_tables()";
-    private static final String COMBINE_ALL = "SELECT combine_all(?)";
+    private static final String COMBINE_ALL = "SELECT * FROM combine_all(?)";
     private static final String SELECT_CLUSTERS = "SELECT * FROM select_clusters()";
 
     /**
@@ -127,6 +128,7 @@ class Store implements AutoCloseable {
         try (val connection = getConnection();
              val statement = connection.createStatement()) {
             String query = Files.lines(Paths.get(file))
+                    .filter(line -> !line.startsWith("--")) //comments
                     .collect(Collectors.joining(" "));
             statement.execute(query);
         }
@@ -253,6 +255,31 @@ class Store implements AutoCloseable {
     }
 
     /**
+     * Creates pre-cluster table. This function moves all rows with
+     * same documents into one table. It firstly takes one query
+     * with the most count of documents and moves it to separate
+     * table. After, it looks for all queries with the same document
+     * and moves them to this table too. And so on, until there is
+     * nothing to move.
+     *
+     * @return pre-cluster table's size
+     */
+    @SneakyThrows(SQLException.class)
+    int createPreCluster() {
+        try (val connection = getConnection();
+             val statement = connection.createStatement()) {
+            val rs = statement.executeQuery(CREATE_PRE_CLUSTER);
+            if (!rs.next()) {
+                log.error("pre_cluster() returns nothing");
+                return -1;
+            }
+            val res = rs.getInt(1);
+            log.info(String.format("Created pre cluster with %d rows", res));
+            return res;
+        }
+    }
+
+    /**
      * Creates tables required to clustering. Uses stored
      * procedure from {@code init.sql} script.
      * <p>
@@ -277,13 +304,19 @@ class Store implements AutoCloseable {
      *                  function returns value exceeding specified value
      *                  for two most similar queries then those queries
      *                  will be combined in one cluster. Otherwise, not
+     * @return count of created clusters
      */
     @SneakyThrows
-    void combineAll(double threshold) {
+    int combineAll(float threshold) {
         try (val connection = getConnection();
              val preparedStatement = connection.prepareStatement(COMBINE_ALL)) {
-            preparedStatement.setDouble(1, threshold);
-            preparedStatement.execute();
+            preparedStatement.setFloat(1, threshold);
+            val rs = preparedStatement.executeQuery();
+            if (!rs.next()) {
+                log.error("combine_all() returns nothing");
+                return -1;
+            }
+            return rs.getInt(1);
         }
     }
 
@@ -354,6 +387,6 @@ class Store implements AutoCloseable {
      */
     @Override
     public void close() throws SQLException {
-        cpds.close();
+        cpds.close(true);
     }
 }
