@@ -236,18 +236,14 @@ END;
 $$ LANGUAGE plpgsql VOLATILE;
 
 -- создание кластеров на основе данных, содержащихся в таблице links_cluster
--- и запись их в таблицу clusters. Возвращает количество созданных кластеров
-CREATE OR REPLACE FUNCTION combine_all(threshold REAL) RETURNS INTEGER AS $$
+-- и запись их в таблицу clusters
+CREATE OR REPLACE FUNCTION combine_all(threshold REAL) RETURNS VOID AS $$
   DECLARE query1     TEXT;
   DECLARE query2     TEXT;
   DECLARE allCount   INTEGER;
   DECLARE currentRes REAL;
   DECLARE concat     TEXT;
-  DECLARE clustCount INTEGER;
 BEGIN
--- для отчетности, чтобы в конце замерить разницу между количеством кластеров
--- до выполнения функции и после
-  SELECT COUNT(*) INTO clustCount FROM clusters;
   CREATE TABLE tmp_links (
     q1 TEXT,
     q2 TEXT,
@@ -311,8 +307,6 @@ BEGIN
       ORDER BY res DESC, cou1 DESC, cou2 DESC LIMIT 1;
   END LOOP;
   DROP TABLE tmp_links;
-  SELECT COUNT(*) - clustCount INTO clustCount FROM clusters;
-  RETURN clustCount;
 END;
 $$ LANGUAGE plpgsql VOLATILE;
 

@@ -39,7 +39,8 @@ public class Clusterizator {
             store.createClusterTables();
             log.info("Cluster tables created");
             log.info("Start clustering");
-            log.info(String.format("Clustering complete. Created %d clusters", store.combineAll(threshold)));
+            store.combineAll(threshold);
+            log.info("Clustering complete");
         }
         log.info("Clustering is over");
     }

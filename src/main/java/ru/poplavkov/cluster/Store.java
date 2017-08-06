@@ -304,19 +304,13 @@ class Store implements AutoCloseable {
      *                  function returns value exceeding specified value
      *                  for two most similar queries then those queries
      *                  will be combined in one cluster. Otherwise, not
-     * @return count of created clusters
      */
     @SneakyThrows
-    int combineAll(float threshold) {
+    void combineAll(float threshold) {
         try (val connection = getConnection();
              val preparedStatement = connection.prepareStatement(COMBINE_ALL)) {
             preparedStatement.setFloat(1, threshold);
-            val rs = preparedStatement.executeQuery();
-            if (!rs.next()) {
-                log.error("combine_all() returns nothing");
-                return -1;
-            }
-            return rs.getInt(1);
+            preparedStatement.execute();
         }
     }
 
